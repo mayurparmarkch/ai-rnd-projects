@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF to CSV Converter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl">
+    <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">PDF to CSV Converter</h1>
+
+    <!-- The form now has a proper ID -->
+    <form id="pdf-form" class="space-y-6">
+      <div>
+        <label for="file" class="block text-sm font-medium text-gray-700">1. Select PDF File</label>
+        <input type="file" id="file" name="file" class="mt-1 block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-indigo-50 file:text-indigo-600
+                    hover:file:bg-indigo-100" required>
+      </div>
+      <div>
+        <label for="prompt" class="block text-sm font-medium text-gray-700">2. Describe the data to extract</label>
+        <input type="text" id="prompt" name="prompt"
+          class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+          placeholder="e.g., Extract the name, email, and phone number" required>
+      </div>
+      <div>
+        <button type="submit" id="submit-btn"
+          class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+          <span id="btn-text">Generate CSV</span>
+          <svg id="spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg"
+            fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+            </path>
+          </svg>
+        </button>
+      </div>
+    </form>
+
+    <div id="result-container" class="mt-8 hidden">
+      <h2 class="text-2xl font-semibold mb-4 text-gray-800">Result</h2>
+
+      <div id="success-message"
+        class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4 hidden" role="alert">
+        <strong class="font-bold">Success!</strong>
+        <span class="block sm:inline" id="success-text"></span>
+      </div>
+
+      <div id="error-message"
+        class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 hidden" role="alert">
+        <strong class="font-bold">Error!</strong>
+        <span class="block sm:inline" id="error-text"></span>
+      </div>
+
+      <div id="preview-section" class="hidden">
+        <h3 class="text-lg font-semibold mb-2">CSV Preview (first 10 rows):</h3>
+        <pre id="csv-preview" class="bg-gray-50 p-4 rounded-md text-sm overflow-x-auto"></pre>
+        <a id="download-link" href="#"
+          class="mt-4 inline-block w-full text-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">Download
+          CSV</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Axios CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+  <script>
+    // Select elements from the DOM
+    const pdfForm = document.getElementById('pdf-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const btnText = document.getElementById('btn-text');
+    const spinner = document.getElementById('spinner');
+
+    const resultContainer = document.getElementById('result-container');
+    const successMessage = document.getElementById('success-message');
+    const successText = document.getElementById('success-text');
+    const errorMessage = document.getElementById('error-message');
+    const errorText = document.getElementById('error-text');
+
+    const previewSection = document.getElementById('preview-section');
+    const csvPreview = document.getElementById('csv-preview');
+    const downloadLink = document.getElementById('download-link');
+
+    // Add the event listener to the form
+    pdfForm.addEventListener('submit', async (event) => {
+      // Prevent page refresh
+      event.preventDefault();
+
+      console.log("Form submission intercepted. Page refresh prevented.");
+
+      // --- UI Reset and Loading State ---
+      submitBtn.disabled = true;
+      btnText.textContent = 'Processing...';
+      spinner.classList.remove('hidden');
+
+      // Hide previous results
+      resultContainer.classList.add('hidden');
+      successMessage.classList.add('hidden');
+      errorMessage.classList.add('hidden');
+      previewSection.classList.add('hidden');
+
+      // --- API Call with Axios ---
+      const formData = new FormData(pdfForm);
+
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/process', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+
+        const result = response.data;
+        resultContainer.classList.remove('hidden');
+
+        console.log("API Success:", result);
+
+        // Populate success data
+        successText.textContent = result.message || 'CSV generated successfully!';
+        csvPreview.textContent = result.csv_preview || '';
+        if (result.csv_filename) {
+          downloadLink.href = `http://127.0.0.1:5000/download/${result.csv_filename}`;
+          downloadLink.download = result.csv_filename;
+        }
+
+        // Show success messages
+        successMessage.classList.remove('hidden');
+        previewSection.classList.remove('hidden');
+
+      } catch (error) {
+        resultContainer.classList.remove('hidden');
+
+        if (error.response) {
+          // Backend returned an error response
+          console.error("API Error:", error.response.data);
+          errorText.textContent = error.response.data.error || 'An error occurred.';
+        } else {
+          // Network error or request not sent
+          console.error("Network or script error:", error);
+          errorText.textContent = 'Failed to connect to the server. Please ensure the Flask API is running.';
+        }
+
+        errorMessage.classList.remove('hidden');
+
+      } finally {
+        // --- Restore Button ---
+        submitBtn.disabled = false;
+        btnText.textContent = 'Generate CSV';
+        spinner.classList.add('hidden');
+      }
+    });
+  </script>
+
+</body>
+
+</html>

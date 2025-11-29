@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en" class="transition-colors duration-300">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PDF → Fotonvr Mapper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: "class" };
+    </script>
+  </head>
+  <body
+    class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col items-center py-10"
+  >
+    <button
+      id="themeToggle"
+      class="fixed top-6 right-6 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-full shadow-md"
+    >
+      🌙 Dark Mode
+    </button>
+
+    <div
+      class="w-full max-w-3xl bg-white dark:bg-gray-800 shadow-lg rounded-xl p-8"
+    >
+      <h1
+        class="text-2xl font-bold text-orange-600 dark:text-orange-400 mb-6 text-center"
+      >
+        PDF → Fotonvr CSV Mapper
+      </h1>
+
+      <!-- PDF Extraction -->
+      <div class="mb-10 overflow-hidden">
+        <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-3">
+          🔍 Extract Data from PDF
+        </h2>
+        <form id="extractForm" class="space-y-4">
+          <input
+            type="file"
+            name="file"
+            accept="application/pdf"
+            required
+            class="block w-full text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
+          />
+          <button
+            type="submit"
+            class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg"
+          >
+            Extract Data
+          </button>
+        </form>
+
+        <div id="extractResult" class="mt-6 hidden">
+          <h3
+            class="text-md font-semibold text-gray-800 dark:text-gray-100 mb-2"
+          >
+            Extracted Data:
+          </h3>
+          <div class="overflow-x-auto overflow-y-auto h-[400px]">
+            <table
+              class="min-w-full border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden dark:text-white"
+            >
+              <thead class="bg-gray-200 dark:bg-gray-700">
+                <tr>
+                  <th class="px-4 py-2 text-left">Chapter No.</th>
+                  <th class="px-4 py-2 text-left">Chepter Title</th>
+                  <th class="px-4 py-2 text-left">Topic</th>
+                  <th class="px-4 py-2 text-left">Description</th>
+                </tr>
+              </thead>
+              <tbody
+                id="extractTableBody"
+                class="bg-white dark:bg-gray-800"
+              ></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CSV Mapping Section -->
+    <div id="csvMapSection" class="hidden mt-6">
+      <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-3">
+        🧩 Upload CSV for Mapping
+      </h2>
+      <form id="mapForm" class="space-y-3">
+        <input
+          type="file"
+          name="csv"
+          accept=".csv"
+          required
+          class="block w-full text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"
+        />
+        <button
+          type="submit"
+          class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg"
+        >
+          Map CSV to Extracted Data
+        </button>
+      </form>
+    </div>
+
+    <script>
+      const html = document.documentElement;
+      const themeToggle = document.getElementById("themeToggle");
+      if (localStorage.getItem("theme") === "dark") {
+        html.classList.add("dark");
+        themeToggle.textContent = "☀️ Light Mode";
+      }
+      themeToggle.onclick = () => {
+        html.classList.toggle("dark");
+        const isDark = html.classList.contains("dark");
+        localStorage.setItem("theme", isDark ? "dark" : "light");
+        themeToggle.textContent = isDark ? "☀️ Light Mode" : "🌙 Dark Mode";
+      };
+
+      let extractedData = [];
+
+      // 🧠 Step 1: Extract PDF
+      document
+        .getElementById("extractForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const formData = new FormData(e.target);
+          const body = document.getElementById("extractTableBody");
+          const box = document.getElementById("extractResult");
+          box.classList.remove("hidden");
+          body.innerHTML = `<tr><td colspan="4" class="text-center py-4">⏳ Extracting...</td></tr>`;
+          try {
+            const res = await fetch("http://localhost:5000/extract", {
+              method: "POST",
+              body: formData,
+            });
+            const data = await res.json();
+            if (data.error)
+              return (body.innerHTML = `<tr><td colspan="4" class="text-red-500">${data.error}</td></tr>`);
+            extractedData = data.data;
+            renderTable(extractedData);
+            document.getElementById("csvMapSection").classList.remove("hidden");
+          } catch (err) {
+            body.innerHTML = `<tr><td colspan="4" class="text-red-500">${err}</td></tr>`;
+          }
+        });
+
+      function renderTable(data) {
+        const body = document.getElementById("extractTableBody");
+        body.innerHTML = data
+          .map(
+            (d) => `<tr class="border-t">
+              <td class="px-4 py-2">${d.chapter || "-"}</td>
+          <td class="px-4 py-2">${d.title || "-"}</td>
+          <td class="px-4 py-2">${d.topic || "-"}</td>
+          <td class="px-4 py-2">${d.description || "-"}</td>
+          ${
+            d.matched_uuid !== undefined
+              ? `<td class="px-4 py-2">${d.matched_uuid || "null"}</td>`
+              : ""
+          }
+        </tr>`
+          )
+          .join("");
+      }
+
+      // 🧩 Step 2: Map Extracted with CSV
+      document
+        .getElementById("mapForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const formData = new FormData(e.target);
+          formData.append("data", JSON.stringify(extractedData));
+          const btn = e.target.querySelector("button");
+          btn.textContent = "⏳ Mapping...";
+          try {
+            const res = await fetch("http://localhost:5000/map-extracted", {
+              method: "POST",
+              body: formData,
+            });
+            const data = await res.json();
+            if (data.error) alert("❌ " + data.error);
+            else {
+              extractedData = data.data;
+              // Add matched_uuid column header
+              const head = document.querySelector("thead tr");
+              if (!document.getElementById("matchedHead")) {
+                head.innerHTML += `<th id="matchedHead" class="px-4 py-2 text-left">Matched UUID</th>`;
+              }
+              renderTable(extractedData);
+              alert("✅ Mapping Complete!");
+            }
+          } catch (err) {
+            alert("❌ " + err);
+          } finally {
+            btn.textContent = "Map CSV to Extracted Data";
+          }
+        });
+    </script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Step 2 - Map PDF & CSV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 min-h-screen flex flex-col items-center py-10">
+    <div class="bg-white shadow-lg rounded-xl p-8 w-full max-w-5xl">
+      <h1 class="text-2xl font-bold text-green-600 mb-6 text-center">
+        Step 2: Map PDF and CSV
+      </h1>
+
+      <form id="mapForm" class="space-y-4">
+        <input type="hidden" name="hash" id="pdfHash" />
+        <input
+          type="file"
+          name="csv"
+          accept=".csv"
+          required
+          class="block w-full border rounded-lg p-2"
+        />
+        <button
+          type="submit"
+          class="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-semibold"
+        >
+          Run Mapping
+        </button>
+      </form>
+
+      <div id="result" class="mt-6 hidden">
+        <h3 class="text-lg font-semibold mb-2">Mapped Results:</h3>
+        <div class="overflow-auto max-h-[500px]">
+          <table class="w-full text-sm border">
+            <thead class="bg-gray-200">
+              <tr>
+                <th class="px-3 py-2">Chapter</th>
+                <th class="px-3 py-2">Title</th>
+                <th class="px-3 py-2">Topic</th>
+                <th class="px-3 py-2">Description</th>
+                <th class="px-3 py-2">Matched UUID</th>
+                <th class="px-3 py-2">Confidence Score</th>
+                <th class="px-3 py-2">Why It Lesser</th>
+                <th class="px-3 py-2">PDF Summary</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const pdfHash = params.get("hash") || "";
+      document.getElementById("pdfHash").value = pdfHash;
+
+      document
+        .getElementById("mapForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const formData = new FormData(e.target);
+          const resBox = document.getElementById("result");
+          const tbody = document.getElementById("tableBody");
+          tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4">⏳ Mapping...</td></tr>`;
+          resBox.classList.remove("hidden");
+
+          try {
+            const res = await fetch("http://localhost:5000/map-extracted", {
+              method: "POST",
+              body: formData,
+            });
+            const data = await res.json();
+            if (data.error) {
+              tbody.innerHTML = `<tr><td colspan="8" class="text-red-500">${data.error}</td></tr>`;
+              return;
+            }
+
+            tbody.innerHTML = data.data
+              .map((d) => {
+                if (d.pdf_summary) {
+                  // summary row
+                  return `<tr class="bg-yellow-100">
+                    <td colspan="7" class="border px-3 py-1 font-semibold text-gray-700">📘 PDF Summary</td>
+                    <td class="border px-3 py-1">${d.pdf_summary}</td>
+                  </tr>`;
+                }
+
+                return `<tr>
+                  <td class="border px-3 py-1">${d.chapter || "-"}</td>
+                  <td class="border px-3 py-1">${d.title || "-"}</td>
+                  <td class="border px-3 py-1">${d.topic || "-"}</td>
+                  <td class="border px-3 py-1">${d.description || "-"}</td>
+                  <td class="border px-3 py-1">${d.matched_uuid || "null"}</td>
+                  <td class="border px-3 py-1">${d.confidence_score || "-"}</td>
+                  <td class="border px-3 py-1">${d.why_it_lesser || "-"}</td>
+                  <td class="border px-3 py-1">${d.pdf_summary || "-"}</td>
+                </tr>`;
+              })
+              .join("");
+          } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-red-500">${err}</td></tr>`;
+          }
+        });
+    </script>
+  </body>
+</html>

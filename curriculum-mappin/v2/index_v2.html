@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI PDF Extract & Mapping</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        text-align: center;
+      }
+      .box {
+        background: #fff;
+        padding: 20px;
+        margin: 20px auto;
+        width: 90%;
+        max-width: 1000px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 20px;
+        font-size: 14px;
+      }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 8px;
+      }
+      th {
+        background: #007bff;
+        color: white;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      #mappingSection {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AI PDF Table Extractor + Mapper</h1>
+
+    <div class="box">
+      <h3>Step 1: Upload PDF to Extract Table</h3>
+      <input type="file" id="pdfInput" accept=".pdf" />
+      <button id="extractBtn">Extract Table</button>
+      <div id="resultBox"></div>
+    </div>
+
+    <div class="box" id="mappingSection">
+      <h3>Step 2: Upload Reference CSV for Mapping</h3>
+      <input type="file" id="csvInput" accept=".csv" />
+      <button id="mapBtn">Run Mapping</button>
+      <div id="mappedResult"></div>
+    </div>
+
+    <script>
+      const API_BASE = "http://localhost:5000";
+      let extractedData = [];
+
+      // ✅ Extract PDF Data
+      document
+        .getElementById("extractBtn")
+        .addEventListener("click", async () => {
+          const pdfInput = document.getElementById("pdfInput");
+          if (!pdfInput.files.length)
+            return alert("Please upload a PDF first.");
+
+          const formData = new FormData();
+          formData.append("file", pdfInput.files[0]);
+          document.getElementById("resultBox").innerHTML =
+            "⏳ Extracting data...";
+
+          try {
+            const res = await fetch(`${API_BASE}/extract`, {
+              method: "POST",
+              body: formData,
+            });
+            const data = await res.json();
+
+            if (data.error) {
+              document.getElementById("resultBox").innerHTML =
+                "❌ " + data.error;
+              return;
+            }
+
+            extractedData = data.data;
+            renderTable(extractedData, "resultBox");
+
+            // ✅ Show mapping step
+            document.getElementById("mappingSection").style.display = "block";
+          } catch (err) {
+            document.getElementById("resultBox").innerHTML = "❌ Error: " + err;
+          }
+        });
+
+      // ✅ Map PDF Data with CSV
+      document.getElementById("mapBtn").addEventListener("click", async () => {
+        const csvInput = document.getElementById("csvInput");
+        if (!csvInput.files.length) return alert("Please upload a CSV first.");
+
+        const formData = new FormData();
+        formData.append("pdf_data", JSON.stringify(extractedData));
+        formData.append("csv_file", csvInput.files[0]);
+        document.getElementById("mappedResult").innerHTML =
+          "⏳ Mapping data...";
+
+        try {
+          const res = await fetch(`${API_BASE}/process`, {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+
+          if (data.error) {
+            document.getElementById("mappedResult").innerHTML =
+              "❌ " + data.error;
+            return;
+          }
+
+          renderTable(data.mapped_data, "mappedResult");
+        } catch (err) {
+          document.getElementById("mappedResult").innerHTML =
+            "❌ Error: " + err;
+        }
+      });
+
+      // ✅ Utility to render JSON as a table
+      function renderTable(arr, containerId) {
+        const box = document.getElementById(containerId);
+        if (!arr || !arr.length) {
+          box.innerHTML = "⚠️ No data found.";
+          return;
+        }
+
+        const keys = Object.keys(arr[0]);
+        const html = `
+        <table>
+          <thead><tr>${keys.map((k) => `<th>${k}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${arr
+              .map(
+                (obj) =>
+                  `<tr>${keys
+                    .map((k) => `<td>${obj[k] ?? ""}</td>`)
+                    .join("")}</tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+      `;
+        box.innerHTML = html;
+      }
+    </script>
+  </body>
+</html>

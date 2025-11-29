@@ -46,3 +46,16 @@ var/
 # Mac / Linux / Windows system files
 .DS_Store
 Thumbs.db
+
+
+curriculum-mappin/v1/.cache/
+curriculum-mappin/v1/output/
+curriculum-mappin/v1/upload/
+
+curriculum-mappin/v2/.cache/
+curriculum-mappin/v2/output/
+curriculum-mappin/v2/upload/
+
+curriculum-mappin/v3/.cache/
+curriculum-mappin/v3/output/
+curriculum-mappin/v3/upload/
