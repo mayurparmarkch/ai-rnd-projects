@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cube Net Unfolding (Mathematically Correct)</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #111;
+      }
+      button {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        padding: 10px 18px;
+        font-size: 16px;
+        cursor: pointer;
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="toggle">Unfold</button>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.152.2/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.152.2/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+      /* -------------------------------------------------- */
+      /* Scene setup */
+      /* -------------------------------------------------- */
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x111111);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        innerWidth / innerHeight,
+        0.1,
+        100
+      );
+      camera.position.set(3, 3, 5);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+      dir.position.set(5, 5, 5);
+      scene.add(dir);
+
+      /* -------------------------------------------------- */
+      /* Cube faces */
+      /* -------------------------------------------------- */
+      const size = 1;
+      const half = size / 2;
+      const faces = [];
+
+      const materials = {
+        front: new THREE.MeshStandardMaterial({
+          color: 0xff5555,
+          side: THREE.DoubleSide,
+        }),
+        back: new THREE.MeshStandardMaterial({
+          color: 0x5555ff,
+          side: THREE.DoubleSide,
+        }),
+        left: new THREE.MeshStandardMaterial({
+          color: 0x55ff55,
+          side: THREE.DoubleSide,
+        }),
+        right: new THREE.MeshStandardMaterial({
+          color: 0xffff55,
+          side: THREE.DoubleSide,
+        }),
+        top: new THREE.MeshStandardMaterial({
+          color: 0xff55ff,
+          side: THREE.DoubleSide,
+        }),
+        bottom: new THREE.MeshStandardMaterial({
+          color: 0x55ffff,
+          side: THREE.DoubleSide,
+        }),
+      };
+
+      function createFace(material) {
+        const geo = new THREE.PlaneGeometry(size, size);
+        const mesh = new THREE.Mesh(geo, material);
+        scene.add(mesh);
+        return mesh;
+      }
+
+      /* Folded positions */
+      const front = createFace(materials.front);
+      front.position.set(0, 0, half);
+
+      const back = createFace(materials.back);
+      back.position.set(0, 0, -half);
+      back.rotation.y = Math.PI;
+
+      const right = createFace(materials.right);
+      right.position.set(half, 0, 0);
+      //   right.rotation.y = -Math.PI / 2;
+      right.rotation.y = Math.PI / 2;
+
+      const left = createFace(materials.left);
+      left.position.set(-half, 0, 0);
+      //   left.rotation.y = Math.PI / 2;
+      left.rotation.y = -Math.PI / 2;
+
+      const top = createFace(materials.top);
+      top.position.set(0, half, 0);
+      top.rotation.x = -Math.PI / 2;
+
+      const bottom = createFace(materials.bottom);
+      bottom.position.set(0, -half, 0);
+      bottom.rotation.x = Math.PI / 2;
+
+      faces.push(front, back, right, left, top, bottom);
+
+      /* -------------------------------------------------- */
+      /* Store original transforms */
+      /* -------------------------------------------------- */
+      faces.forEach((f) => {
+        f.userData.foldedPos = f.position.clone();
+        f.userData.foldedQuat = f.quaternion.clone();
+      });
+
+      /* -------------------------------------------------- */
+      /* Unfolded (net) transforms */
+      /* -------------------------------------------------- */
+      const unfolded = {
+        front: {
+          pos: new THREE.Vector3(0, 0, 0),
+          quat: new THREE.Quaternion(),
+        },
+
+        right: {
+          pos: new THREE.Vector3(size, 0, 0),
+          quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0)),
+        },
+
+        left: {
+          pos: new THREE.Vector3(-size, 0, 0),
+          quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0)),
+        },
+
+        back: {
+          pos: new THREE.Vector3(2 * size, 0, 0),
+          quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0)),
+        },
+
+        top: {
+          pos: new THREE.Vector3(0, size, 0),
+          quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0)),
+        },
+
+        bottom: {
+          pos: new THREE.Vector3(0, -size, 0),
+          quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0)),
+        },
+      };
+
+      /* -------------------------------------------------- */
+      /* Animation state */
+      /* -------------------------------------------------- */
+      let unfoldedState = false;
+
+      document.getElementById("toggle").onclick = () => {
+        unfoldedState = !unfoldedState;
+        toggle.textContent = unfoldedState ? "Fold" : "Unfold";
+      };
+
+      /* -------------------------------------------------- */
+      /* Animation loop */
+      /* -------------------------------------------------- */
+      function animate() {
+        requestAnimationFrame(animate);
+
+        faces.forEach((face) => {
+          let targetPos, targetQuat;
+
+          if (!unfoldedState) {
+            targetPos = face.userData.foldedPos;
+            targetQuat = face.userData.foldedQuat;
+          } else {
+            if (face === front)
+              ({ pos: targetPos, quat: targetQuat } = unfolded.front);
+            if (face === right)
+              ({ pos: targetPos, quat: targetQuat } = unfolded.right);
+            if (face === left)
+              ({ pos: targetPos, quat: targetQuat } = unfolded.left);
+            if (face === back)
+              ({ pos: targetPos, quat: targetQuat } = unfolded.back);
+            if (face === top)
+              ({ pos: targetPos, quat: targetQuat } = unfolded.top);
+            if (face === bottom)
+              ({ pos: targetPos, quat: targetQuat } = unfolded.bottom);
+          }
+
+          face.position.lerp(targetPos, 0.12);
+          face.quaternion.slerp(targetQuat, 0.12);
+        });
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      animate();
+
+      window.addEventListener("resize", () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+      });
+    </script>
+  </body>
+</html>

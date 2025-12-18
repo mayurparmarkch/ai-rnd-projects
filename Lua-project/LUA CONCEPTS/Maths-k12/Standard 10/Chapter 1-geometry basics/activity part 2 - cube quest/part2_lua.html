@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cube Quest – Lua Driven</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #0f172a;
+        font-family: Arial, sans-serif;
+        color: white;
+      }
+
+      #ui {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 14px;
+        border-radius: 10px;
+        width: 260px;
+      }
+
+      button {
+        width: 100%;
+        margin-top: 6px;
+        padding: 8px;
+        font-size: 14px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        background: #38bdf8;
+        color: black;
+        font-weight: bold;
+      }
+
+      .option {
+        background: #334155;
+        color: white;
+      }
+
+      #message {
+        margin-top: 8px;
+        font-weight: bold;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui">
+      <h2 style="text-align: center">🧊 Cube Quest</h2>
+      <button id="facesBtn">Count Faces</button>
+      <button id="edgesBtn">Reveal Edges</button>
+      <button id="cornersBtn">Show Corners</button>
+      <div id="question"></div>
+      <div id="options"></div>
+      <div id="message"></div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.152.2/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.152.2/examples/jsm/",
+          "wasmoon": "https://cdn.jsdelivr.net/npm/wasmoon@1.16.0/+esm"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { LuaFactory } from "wasmoon";
+
+      /* ==================================================
+   LUA = GAME BRAIN
+================================================== */
+      const lua = await new LuaFactory().createEngine();
+
+      await lua.doString(`
+game = {
+  current = nil,
+  activities = {
+    faces = {
+      question = "How many faces does a cube have?",
+      options = { "4", "6", "8" },
+      correct = 2
+    },
+    edges = {
+      question = "How many edges does a cube have?",
+      options = { "10", "12", "14" },
+      correct = 2
+    },
+    corners = {
+      question = "How many corners does a cube have?",
+      options = { "6", "10", "8" },
+      correct = 3
+    }
+  }
+}
+
+function start(mode)
+  game.current = mode
+  return game.activities[mode]
+end
+
+function checkAnswer(index)
+  local a = game.activities[game.current]
+  if index == a.correct then
+    return { ok = true, msg = "✔ Correct!" }
+  else
+    return { ok = false, msg = "✖ Try again" }
+  end
+end
+`);
+
+      const luaStart = lua.global.get("start");
+      const luaCheck = lua.global.get("checkAnswer");
+
+      /* ==================================================
+   THREE.JS SETUP
+================================================== */
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0f172a);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        innerWidth / innerHeight,
+        0.1,
+        100
+      );
+      camera.position.set(3, 3, 5);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+      dir.position.set(5, 5, 5);
+      scene.add(dir);
+
+      /* ==================================================
+   CUBE
+================================================== */
+      const size = 1.5;
+      const cube = new THREE.Mesh(
+        new THREE.BoxGeometry(size, size, size),
+        new THREE.MeshStandardMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.9,
+        })
+      );
+      scene.add(cube);
+
+      /* ==================================================
+   HELPERS
+================================================== */
+      let helpers = [];
+      function clearHelpers() {
+        helpers.forEach((h) => scene.remove(h));
+        helpers = [];
+      }
+
+      function showFaces() {
+        clearHelpers();
+        const d = size / 1.99;
+        [
+          [0, 0, d],
+          [0, 0, -d],
+          [d, 0, 0],
+          [-d, 0, 0],
+          [0, d, 0],
+          [0, -d, 0],
+        ].forEach((p) => {
+          const m = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.4, 1.4),
+            new THREE.MeshBasicMaterial({
+              color: 0xff5555,
+              side: THREE.DoubleSide,
+            })
+          );
+          m.position.set(...p);
+          m.lookAt(0, 0, 0);
+          scene.add(m);
+          helpers.push(m);
+        });
+      }
+
+      function showEdges() {
+        clearHelpers();
+        const e = new THREE.LineSegments(
+          new THREE.EdgesGeometry(cube.geometry),
+          new THREE.LineBasicMaterial({ color: 0xffff00 })
+        );
+        scene.add(e);
+        helpers.push(e);
+      }
+
+      function showCorners() {
+        clearHelpers();
+        const h = size / 2;
+        [
+          [h, h, h],
+          [-h, h, h],
+          [h, -h, h],
+          [-h, -h, h],
+          [h, h, -h],
+          [-h, h, -h],
+          [h, -h, -h],
+          [-h, -h, -h],
+        ].forEach((p) => {
+          const s = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08),
+            new THREE.MeshBasicMaterial({ color: 0x22c55e })
+          );
+          s.position.set(...p);
+          scene.add(s);
+          helpers.push(s);
+        });
+      }
+
+      /* ==================================================
+   UI BINDING
+================================================== */
+      const q = document.getElementById("question");
+      const o = document.getElementById("options");
+      const m = document.getElementById("message");
+
+      function renderQuestion(data) {
+        q.innerHTML = "<b>" + data.question + "</b>";
+        o.innerHTML = "";
+        m.textContent = "";
+
+        data.options.forEach((opt, i) => {
+          const b = document.createElement("button");
+          b.textContent = opt;
+          b.className = "option";
+          b.onclick = () => {
+            const r = luaCheck(i + 1);
+            m.textContent = r.msg;
+            m.style.color = r.ok ? "#22c55e" : "#ef4444";
+          };
+          o.appendChild(b);
+        });
+      }
+
+      facesBtn.onclick = () => {
+        showFaces();
+        renderQuestion(luaStart("faces"));
+      };
+
+      edgesBtn.onclick = () => {
+        showEdges();
+        renderQuestion(luaStart("edges"));
+      };
+
+      cornersBtn.onclick = () => {
+        showCorners();
+        renderQuestion(luaStart("corners"));
+      };
+
+      /* ==================================================
+   LOOP
+================================================== */
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener("resize", () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+      });
+    </script>
+  </body>
+</html>

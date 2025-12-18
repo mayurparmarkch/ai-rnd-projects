@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cube Quest – Prove It!</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #0f172a;
+        font-family: Arial, sans-serif;
+        color: white;
+      }
+
+      #ui {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 14px;
+        border-radius: 10px;
+        width: 260px;
+      }
+
+      #ui h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        text-align: center;
+      }
+
+      button {
+        width: 100%;
+        margin-top: 6px;
+        padding: 8px;
+        font-size: 14px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        background: #38bdf8;
+        color: black;
+        font-weight: bold;
+      }
+
+      button:hover {
+        background: #0ea5e9;
+      }
+
+      #question {
+        margin-top: 10px;
+        font-size: 14px;
+      }
+
+      .option {
+        background: #334155;
+        color: white;
+        margin-top: 5px;
+      }
+
+      .option:hover {
+        background: #475569;
+      }
+
+      #message {
+        margin-top: 8px;
+        font-weight: bold;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui">
+      <h2>🧊 Cube Quest</h2>
+
+      <button id="facesBtn">Count Faces</button>
+      <button id="edgesBtn">Reveal Edges</button>
+      <button id="cornersBtn">Show Corners</button>
+
+      <div id="question"></div>
+      <div id="options"></div>
+      <div id="message"></div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.152.2/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.152.2/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+      /* ---------------- Scene Setup ---------------- */
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0f172a);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        innerWidth / innerHeight,
+        0.1,
+        100
+      );
+      camera.position.set(3, 3, 5);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      /* ---------------- Lights ---------------- */
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+      dir.position.set(5, 5, 5);
+      scene.add(dir);
+
+      /* ---------------- Cube ---------------- */
+      const cubeSize = 1.5;
+      const cubeGeo = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+      const cubeMat = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.9,
+      });
+      const cube = new THREE.Mesh(cubeGeo, cubeMat);
+      scene.add(cube);
+
+      /* ---------------- Helpers ---------------- */
+      let faceHelpers = [];
+      let edgeHelpers = [];
+      let cornerHelpers = [];
+
+      function clearHelpers() {
+        [...faceHelpers, ...edgeHelpers, ...cornerHelpers].forEach((h) =>
+          scene.remove(h)
+        );
+        faceHelpers = [];
+        edgeHelpers = [];
+        cornerHelpers = [];
+      }
+
+      /* ---------------- FACE HIGHLIGHT ---------------- */
+      function showFaces() {
+        clearHelpers();
+        const positions = [
+          [0, 0, cubeSize / 1.99],
+          [0, 0, -cubeSize / 1.99],
+          [cubeSize / 1.99, 0, 0],
+          [-cubeSize / 1.99, 0, 0],
+          [0, cubeSize / 1.99, 0],
+          [0, -cubeSize / 1.99, 0],
+        ];
+
+        positions.forEach((p) => {
+          const plane = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.4, 1.4),
+            new THREE.MeshBasicMaterial({
+              color: 0xff5555,
+              side: THREE.DoubleSide,
+            })
+          );
+          plane.position.set(...p);
+          plane.lookAt(0, 0, 0);
+          scene.add(plane);
+          faceHelpers.push(plane);
+        });
+
+        askQuestion("How many faces does a cube have?", ["4", "6", "8"], 1);
+      }
+
+      /* ---------------- EDGE HIGHLIGHT ---------------- */
+      function showEdges() {
+        clearHelpers();
+        const edges = new THREE.EdgesGeometry(cubeGeo);
+        const line = new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({ color: 0xffff00 })
+        );
+        scene.add(line);
+        edgeHelpers.push(line);
+
+        askQuestion("How many edges does a cube have?", ["10", "12", "14"], 1);
+      }
+
+      /* ---------------- CORNERS ---------------- */
+      function showCorners() {
+        clearHelpers();
+        const h = cubeSize / 2;
+        const points = [
+          [h, h, h],
+          [-h, h, h],
+          [h, -h, h],
+          [-h, -h, h],
+          [h, h, -h],
+          [-h, h, -h],
+          [h, -h, -h],
+          [-h, -h, -h],
+        ];
+
+        points.forEach((p) => {
+          const s = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08),
+            new THREE.MeshBasicMaterial({ color: 0x22c55e })
+          );
+          s.position.set(...p);
+          scene.add(s);
+          cornerHelpers.push(s);
+        });
+
+        askQuestion(
+          "How many corners (vertices) does a cube have?",
+          ["6", "10", "8"],
+          2
+        );
+      }
+
+      /* ---------------- QUIZ LOGIC ---------------- */
+      const questionDiv = document.getElementById("question");
+      const optionsDiv = document.getElementById("options");
+      const messageDiv = document.getElementById("message");
+
+      function askQuestion(text, options, correctIndex) {
+        questionDiv.innerHTML = "<b>" + text + "</b>";
+        optionsDiv.innerHTML = "";
+        messageDiv.textContent = "";
+
+        options.forEach((opt, i) => {
+          const btn = document.createElement("button");
+          btn.textContent = opt;
+          btn.className = "option";
+          btn.onclick = () => {
+            if (i === correctIndex) {
+              messageDiv.textContent = "✔ Correct!";
+              messageDiv.style.color = "#22c55e";
+            } else {
+              messageDiv.textContent = "✖ Try again";
+              messageDiv.style.color = "#ef4444";
+            }
+          };
+          optionsDiv.appendChild(btn);
+        });
+      }
+
+      /* ---------------- UI EVENTS ---------------- */
+      facesBtn.onclick = showFaces;
+      edgesBtn.onclick = showEdges;
+      cornersBtn.onclick = showCorners;
+
+      /* ---------------- Animate ---------------- */
+      function animate() {
+        requestAnimationFrame(animate);
+        // cube.rotation.y += 0.004;
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener("resize", () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+      });
+    </script>
+  </body>
+</html>

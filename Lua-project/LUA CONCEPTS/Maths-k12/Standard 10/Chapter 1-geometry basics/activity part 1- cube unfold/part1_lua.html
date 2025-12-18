@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cube Net – Lua Driven</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #111;
+      }
+      button {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        padding: 10px 18px;
+        font-size: 16px;
+        cursor: pointer;
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="toggle">Unfold</button>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.152.2/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.152.2/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { LuaFactory } from "wasmoon";
+
+      /* ==================================================
+   LUA = STORE + REDUCER + CONFIG
+================================================== */
+      const lua = await new LuaFactory().createEngine();
+
+      await lua.doString(`
+        state = {
+          unfolded = false,
+          speed = 0.12,
+          faces = { "front", "right", "left", "back", "top", "bottom" },
+          net = {
+            front  = { x = 0,  y = 0 },
+            right  = { x = 1,  y = 0 },
+            left   = { x = -1, y = 0 },
+            back   = { x = 2,  y = 0 },
+            top    = { x = 0,  y = 1 },
+            bottom = { x = 0,  y = -1 }
+          }
+        }
+
+        function toggle()
+          state.unfolded = not state.unfolded
+          return {
+            unfolded = state.unfolded,
+            label = state.unfolded and "Fold" or "Unfold"
+          }
+        end
+
+        function getState()
+          return state
+        end
+`);
+
+      const luaToggle = lua.global.get("toggle");
+      const luaGetState = lua.global.get("getState");
+
+      /* ==================================================
+   THREE.JS SETUP
+================================================== */
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x111111);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        innerWidth / innerHeight,
+        0.1,
+        100
+      );
+      camera.position.set(3, 3, 5);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+      dir.position.set(5, 5, 5);
+      scene.add(dir);
+
+      /* ==================================================
+   CUBE CREATION
+================================================== */
+      const size = 1;
+      const half = size / 2;
+
+      const materials = {
+        front: 0xff5555,
+        back: 0x5555ff,
+        left: 0x55ff55,
+        right: 0xffff55,
+        top: 0xff55ff,
+        bottom: 0x55ffff,
+      };
+
+      const faces = {};
+
+      function createFace(color) {
+        return new THREE.Mesh(
+          new THREE.PlaneGeometry(size, size),
+          new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide })
+        );
+      }
+
+      // folded cube
+      faces.front = createFace(materials.front);
+      faces.front.position.set(0, 0, half);
+
+      faces.back = createFace(materials.back);
+      faces.back.position.set(0, 0, -half);
+      faces.back.rotation.y = Math.PI;
+
+      faces.right = createFace(materials.right);
+      faces.right.position.set(half, 0, 0);
+      faces.right.rotation.y = Math.PI / 2;
+
+      faces.left = createFace(materials.left);
+      faces.left.position.set(-half, 0, 0);
+      faces.left.rotation.y = -Math.PI / 2;
+
+      faces.top = createFace(materials.top);
+      faces.top.position.set(0, half, 0);
+      faces.top.rotation.x = -Math.PI / 2;
+
+      faces.bottom = createFace(materials.bottom);
+      faces.bottom.position.set(0, -half, 0);
+      faces.bottom.rotation.x = Math.PI / 2;
+
+      Object.values(faces).forEach((f) => {
+        scene.add(f);
+        f.userData.foldedPos = f.position.clone();
+        f.userData.foldedQuat = f.quaternion.clone();
+      });
+
+      /* ==================================================
+   LUA → JS DATA BRIDGE
+================================================== */
+      const luaState = luaGetState();
+      const flatQuat = new THREE.Quaternion();
+
+      /* ==================================================
+   UI
+================================================== */
+      let isUnfolded = false;
+      document.getElementById("toggle").onclick = () => {
+        const r = luaToggle();
+        isUnfolded = r.unfolded;
+        toggle.textContent = r.label;
+      };
+
+      /* ==================================================
+   ANIMATION LOOP
+================================================== */
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const { net, speed } = luaState;
+
+        for (const name in faces) {
+          const face = faces[name];
+          let targetPos, targetQuat;
+
+          if (!isUnfolded) {
+            targetPos = face.userData.foldedPos;
+            targetQuat = face.userData.foldedQuat;
+          } else {
+            targetPos = new THREE.Vector3(
+              net[name].x * size,
+              net[name].y * size,
+              0
+            );
+            targetQuat = flatQuat;
+          }
+
+          face.position.lerp(targetPos, speed);
+          face.quaternion.slerp(targetQuat, speed);
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener("resize", () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+      });
+    </script>
+  </body>
+</html>
